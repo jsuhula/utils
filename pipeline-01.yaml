@@ -1,0 +1,70 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)-JSUHUL-Dev
+
+trigger:
+  - master
+
+variables:
+  deployPath: '/opt/tomcat/webapps/'
+  warName: 'api-rest.war'
+
+stages:
+- stage: BuildAndDeploy
+  displayName: "Build y Deploy usando SOLO Environment"
+  jobs:
+    - deployment: BuildDeployJob
+      displayName: "Build + Deploy en la misma VM"
+      environment: 
+        name: 'development-env'
+        resourceName: 'JSUHULA'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+
+              - checkout: self
+                clean: true
+                displayName: "Descargar código del repositorio"
+
+              - script: |
+                  echo ">>> Compilando proyecto..."
+
+                  cd $(System.DefaultWorkingDirectory)/java-practice
+
+                  mvn clean package -DskipTests
+                  
+                displayName: "Compilar con Maven"
+
+              - script: |
+                  echo ">>> Desplegando WAR..."
+
+                  systemctl stop tomcat || true
+
+                  cp $(System.DefaultWorkingDirectory)/target/*.war \
+                     /opt/tomcat/webapps/api-rest.war
+
+                  systemctl start tomcat
+
+                  echo ">>> Despliegue finalizado."
+
+                displayName: "Copiar WAR y reiniciar servicio"
+              - task: CopyFiles@2
+                displayName: "Copiar WAR al staging"
+                inputs:
+                  SourceFolder: "$(System.DefaultWorkingDirectory)/target"
+                  Contents: "*.war"
+                  TargetFolder: "$(Build.ArtifactStagingDirectory)"
+
+              - task: PublishBuildArtifacts@1
+                displayName: "Publicar Artefacto"
+                inputs:
+                  PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+                  ArtifactName: "drop"
+                  publishLocation: "Container"
+              - task: PublishBuildArtifacts@1
+                displayName: "Publicar Artefacto"
+                inputs:
+                  PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+                  ArtifactName: "drop"
+                  publishLocation: "Container"
+
+
